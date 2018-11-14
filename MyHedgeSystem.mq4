@@ -1,4 +1,3 @@
-
 #define MAGIC  20181109
 int MaxSlippage=3;
 
@@ -32,10 +31,11 @@ int OnInit()
 	{
 		readEnv();
 		drawLevels(false);
-   	}
+   }
 	else
 	{
 		writeEnv(true);
+		drawLevels(false);
 	}
 	return(INIT_SUCCEEDED);
 }
@@ -191,7 +191,8 @@ void openOrder(int trigger)
 	if (CurrentTradeDirection == trigger) return;
    
 	double nextPositionSize = 0;
-	if( trigger ==  OP_BUY ) {
+	if( trigger ==  OP_BUY )
+	{
 		nextPositionSize = NextLongPositionSize;
 		NextLongPositionSize += nextPositionSize;
 	} else if( trigger ==  OP_SELL ) {
@@ -207,7 +208,7 @@ void openOrder(int trigger)
 		Print("OrderSend error ",GetLastError());
 	
 	CurrentTradeDirection = trigger;
-	writeEnv();
+	writeEnv(true);
 }
 
 
