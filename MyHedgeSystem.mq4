@@ -19,6 +19,11 @@ double Factor = 1;
 input double LotSize = 1;
 int CurrentTradeDirection = -1;
 
+input ENUM_TIMEFRAMES Timeframe = PERIOD_H1;
+input int FastMA = 12;
+input int SlowMA = 26;
+
+
 int OnInit()
 {
    Factor = (TargetPips + ZonePips) / (double)TargetPips;
@@ -26,10 +31,11 @@ int OnInit()
    if(OrdersTotal() > 0)
    {
       readEnv();
+      drawLevels(false);
    }
    else
    {
-		writeEnv(true);
+		writeEnv();
    }
    return(INIT_SUCCEEDED);
 }
@@ -46,21 +52,9 @@ void readEnv()
    	
    NextLongPositionSize = GlobalVariableGet("NextLongPositionSize");
    NextShortPositionSize = GlobalVariableGet("NextShortPositionSize");
-      
-   drawLevels();
 }
-void writeEnv(bool reset)
+void writeEnv()
 {
-   if(reset) {
-   	Direction = -1;
-   	CurrentTradeDirection = -1;
-   	SourceUp = (Ask + ( (ZonePips/2) / digits ) );
-   	SourceDown = (Ask - ( (ZonePips/2) / digits) );
-   	TargetUp = SourceUp + ( TargetPips / digits ) ;
-   	TargetDown = SourceDown - ( TargetPips / digits );
-   	NextLongPositionSize = 0; 
-   	NextShortPositionSize = 0;   
-   }
    GlobalVariableSet("Direction", Direction);
    GlobalVariableSet("CurrentTradeDirection", CurrentTradeDirection);
    	
@@ -71,12 +65,18 @@ void writeEnv(bool reset)
    	
    GlobalVariableSet("NextLongPositionSize", NextLongPositionSize);
    GlobalVariableSet("NextShortPositionSize", NextShortPositionSize);
-      
-   drawLevels();
 }
 
-void drawLevels()
+void drawLevels(bool calculate)
 { 
+
+   if(calculate) {
+      SourceUp = (Ask + ( (ZonePips/2) / digits ) );
+      SourceDown = (Ask - ( (ZonePips/2) / digits) );
+      TargetUp = SourceUp + ( TargetPips / digits ) ;
+      TargetDown = SourceDown - ( TargetPips / digits );
+   }
+   
    string comment = "INPUTS \n-----------------\nTargetPips = %G\nZonePips = %G\nFactor = %G\n\n"
                     "LEVELS \n-----------------\nSourceUp = %G\nSourceDown = %G\nTargetUp = %G\nTargetDown = %G\n\n"
                     "POSITIONS\n----------------\nCurrentLongPositionSize = %.2f\nCurrenttShortPositionSize = %.2f\nNextLongPositionSize = %.2f\nNextShortPositionSize = %.2f\nTotal Positions = %G\nDirection = %s";
@@ -156,7 +156,7 @@ double getCurrentPositionSize(int type)
    return size;
 }
 
-bool closeOrders()
+void closeOrders()
 {
    for(int i=0;i<OrdersTotal();i++)
    {
@@ -165,24 +165,20 @@ bool closeOrders()
       
       double price = (OrderType() == OP_BUY) ? Bid : Ask;
 		if( !OrderClose(OrderTicket(),OrderLots(),price,MaxSlippage) )
-      {
          Print("OrderClose error ",GetLastError());  
-         return false;
-      }
    }
 
-	writeEnv(true);
-   return true;
+
+	Direction = -1;
+	CurrentTradeDirection = -1;
+	NextLongPositionSize = 0; 
+	NextShortPositionSize = 0;   
+	ObjectsDeleteAll();
 }
 
 void openOrder(int trigger) {
 
    if (CurrentTradeDirection == trigger) return;
-   if( Direction < 0 ) {
-      Direction = trigger;
-      NextLongPositionSize = (Direction == OP_BUY) ? LotSize : ( LotSize * Factor );
-      NextShortPositionSize = (Direction == OP_SELL) ? LotSize : ( LotSize * Factor );
-   }
    
    double nextPositionSize = 0;
 	if( trigger ==  OP_BUY ) {
@@ -197,12 +193,11 @@ void openOrder(int trigger) {
 	nextPositionSize -= currentPositionSize;
 	double price = (trigger == OP_BUY)? Ask : Bid;
 	color clr = (trigger == OP_BUY)? Green : Red;
-   if( !OrderSend(Symbol(), trigger,nextPositionSize, price, MaxSlippage,0,0,"Created with MyHedgeSystem",MAGIC,0,clr) ) {
+   if( !OrderSend(Symbol(), trigger,nextPositionSize, price, MaxSlippage,0,0,"Created with MyHedgeSystem",MAGIC,0,clr) )
 	  Print("OrderSend error ",GetLastError());
-	  return;  
-   }	
+	
 	CurrentTradeDirection = trigger;
-	writeEnv(false);
+	writeEnv();
 }
 
 
@@ -211,13 +206,46 @@ void OnTick()
 	if( OrdersTotal() > 0 && (Ask > TargetUp || Bid < TargetDown ) )
 	{
 		closeOrders();
+		return;
 	}
-   else if(Ask > SourceUp) 
-   {
-   	openOrder(OP_BUY);    
-   }
-   else if (Bid < SourceDown)
-   {
-		openOrder(OP_SELL); 
+	
+   if( Direction < 0 ) {
+   	//--- go trading only for first tiks of new bar
+      if(Volume[0]>1) return;
+      //--- get Moving Average 
+      double currentFastMA =iMA(NULL,Timeframe,FastMA,0,MODE_SMA,PRICE_CLOSE,0);
+      double lastFastMA = iMA(NULL,Timeframe,FastMA,0,MODE_SMA,PRICE_CLOSE, 1);
+      double currentSlowMA = iMA(NULL,Timeframe,SlowMA,0,MODE_SMA,PRICE_CLOSE,0);
+      double lastSlowMA = iMA(NULL,Timeframe,SlowMA,0,MODE_SMA,PRICE_CLOSE, 1);
+         
+      //--- buy conditions
+      if(lastFastMA <= lastSlowMA && currentFastMA > currentSlowMA )
+      {
+         Direction = OP_BUY;
+         NextLongPositionSize = LotSize;
+         NextShortPositionSize = LotSize * Factor;
+         
+         openOrder(OP_BUY);
+         drawLevels(true);
+      }
+      //--- sell conditions
+      if(lastFastMA >= lastSlowMA && currentFastMA < currentSlowMA)
+      {
+         Direction = OP_SELL;
+         NextLongPositionSize =  LotSize * Factor;;
+         NextShortPositionSize = LotSize;
+         
+         openOrder(OP_SELL);
+         drawLevels(true);
+      }
+   } else {
+      if(Ask > SourceUp) 
+      {
+      	openOrder(OP_BUY);    
+      }
+      else if (Bid < SourceDown)
+      {
+   		openOrder(OP_SELL); 
+      }
    }
 }
