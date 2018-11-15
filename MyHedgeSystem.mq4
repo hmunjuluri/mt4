@@ -30,13 +30,12 @@ int OnInit()
 	if(OrdersTotal() > 0)
 	{
 		readEnv();
-		drawLevels(false);
    }
 	else
 	{
 		writeEnv(true);
-		drawLevels(false);
 	}
+	drawLevels(false);
 	return(INIT_SUCCEEDED);
 }
 
@@ -208,7 +207,7 @@ void openOrder(int trigger)
 		Print("OrderSend error ",GetLastError());
 	
 	CurrentTradeDirection = trigger;
-	writeEnv(true);
+	writeEnv(false);
 }
 
 
