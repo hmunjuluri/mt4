@@ -5,8 +5,6 @@ double digits = 10000.0;
 input int TargetPips = 50;
 input int ZonePips = 20;
 input ENUM_TIMEFRAMES Timeframe = PERIOD_H1;
-input int FastMA = 12;
-input int SlowMA = 26;
 
 double NextLongPositionSize = 0; 
 double NextShortPositionSize = 0;
@@ -210,6 +208,31 @@ void openOrder(int trigger)
 	writeEnv(false);
 }
 
+bool checkBuySell(int orderType, int index) 
+{
+	double ema4  = iMA(NULL,Timeframe,4,0,MODE_SMA,PRICE_CLOSE, index);
+	double ema8  = iMA(NULL,Timeframe,8,0,MODE_SMA,PRICE_CLOSE, index); 
+	double ema12 = iMA(NULL,Timeframe,12,0,MODE_SMA,PRICE_CLOSE, index);
+	double ema16 = iMA(NULL,Timeframe,16,0,MODE_SMA,PRICE_CLOSE, index);  
+	double ema20 = iMA(NULL,Timeframe,20,0,MODE_SMA,PRICE_CLOSE, index);
+	
+	if( orderType == OP_BUY 
+	    && ema4 > ema8 
+	    && ema8 > ema12 
+	    && ema12 > ema16 
+	    && ema16 > ema20 )    
+	    return true;
+	else 
+	if( orderType == OP_SELL 
+	    && ema4 < ema8 
+	    && ema8 < ema12 
+	    && ema12 < ema16 
+	    && ema16 < ema20 )    
+	    return true;
+	else
+	    return false;
+}
+
 
 void OnTick()
 {
@@ -219,18 +242,13 @@ void OnTick()
 		return;
 	}
 	
-	if( Direction < 0 ) 
+	if( OrdersTotal() == 0 ) 
 	{
 		//--- go trading only for first tiks of new bar
 		if(Volume[0]>1) return;
-		//--- get Moving Average 
-		double currentFastMA =iMA(NULL,Timeframe,FastMA,0,MODE_SMA,PRICE_CLOSE,0);
-		double lastFastMA = iMA(NULL,Timeframe,FastMA,0,MODE_SMA,PRICE_CLOSE, 1);
-		double currentSlowMA = iMA(NULL,Timeframe,SlowMA,0,MODE_SMA,PRICE_CLOSE,0);
-		double lastSlowMA = iMA(NULL,Timeframe,SlowMA,0,MODE_SMA,PRICE_CLOSE, 1);
          
 		//--- buy conditions
-		if(lastFastMA <= lastSlowMA && currentFastMA > currentSlowMA )
+		if( checkBuySell(OP_BUY, 0) && !checkBuySell(OP_BUY, 1) )
 		{
 			Direction = OP_BUY;
 			NextLongPositionSize = LotSize;
@@ -240,7 +258,7 @@ void OnTick()
 			drawLevels(true);
 		}
 		//--- sell conditions
-		if(lastFastMA >= lastSlowMA && currentFastMA < currentSlowMA)
+		else if( checkBuySell(OP_SELL, 0) && !checkBuySell(OP_SELL, 1) )
 		{
 			Direction = OP_SELL;
 			NextLongPositionSize =  LotSize * Factor;;
@@ -250,7 +268,7 @@ void OnTick()
 			drawLevels(true);
 		}
 	} 
-	else 
+	else if(OrdersTotal() > 0)
 	{
 		if(Ask > SourceUp) 
 		{
