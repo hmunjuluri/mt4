@@ -28,12 +28,12 @@ int OnInit()
 	if(OrdersTotal() > 0)
 	{
 		readEnv();
-   }
+		drawLevels();
+    }
 	else
 	{
 		writeEnv(true);
 	}
-	drawLevels(false);
 	return(INIT_SUCCEEDED);
 }
 
@@ -77,17 +77,8 @@ void writeEnv(bool reset)
 	GlobalVariableSet("NextShortPositionSize", NextShortPositionSize);
 }
 
-void drawLevels(bool calculate)
-{ 
-
-	if(calculate) 
-	{
-		SourceUp = (Ask + ( (ZonePips/2) / digits ) );
-		SourceDown = (Ask - ( (ZonePips/2) / digits) );
-		TargetUp = SourceUp + ( TargetPips / digits ) ;
-		TargetDown = SourceDown - ( TargetPips / digits );
-	}
-   
+void drawLevels()
+{  
 	string comment = "INPUTS \n-----------------\nTargetPips = %G\nZonePips = %G\nFactor = %G\n\n"
                     "LEVELS \n-----------------\nSourceUp = %G\nSourceDown = %G\nTargetUp = %G\nTargetDown = %G\n\n"
                     "POSITIONS\n----------------\nCurrentLongPositionSize = %.2f\nCurrenttShortPositionSize = %.2f\nNextLongPositionSize = %.2f\nNextShortPositionSize = %.2f\nTotal Positions = %G\nDirection = %s";
@@ -181,6 +172,7 @@ void closeOrders()
 	}
 
 	writeEnv(true);
+	drawLevels();
 }
 
 void openOrder(int trigger) 
@@ -255,7 +247,12 @@ void OnTick()
 			NextShortPositionSize = LotSize * Factor;
          
 			openOrder(OP_BUY);
-			drawLevels(true);
+			
+	        SourceUp = Ask;
+		    SourceDown = (Ask - ( ZonePips / digits) );
+		    TargetUp = SourceUp + ( TargetPips / digits ) ;
+		    TargetDown = SourceDown - ( TargetPips / digits );
+			drawLevels();
 		}
 		//--- sell conditions
 		else if( checkBuySell(OP_SELL, 0) && !checkBuySell(OP_SELL, 1) )
@@ -265,7 +262,12 @@ void OnTick()
 			NextShortPositionSize = LotSize;
          
 			openOrder(OP_SELL);
-			drawLevels(true);
+			
+		    SourceDown = Bid;
+		    SourceUp = (Bid + ( ZonePips / digits) );
+		    TargetUp = SourceUp + ( TargetPips / digits ) ;
+		    TargetDown = SourceDown - ( TargetPips / digits );
+			drawLevels();
 		}
 	} 
 	else if(OrdersTotal() > 0)
