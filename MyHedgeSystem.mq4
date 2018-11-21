@@ -28,12 +28,12 @@ int OnInit()
 	if(OrdersTotal() > 0)
 	{
 		readEnv();
-		drawLevels();
     }
 	else
 	{
 		writeEnv(true);
 	}
+	drawLevels();
 	return(INIT_SUCCEEDED);
 }
 
